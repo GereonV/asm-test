@@ -1,5 +1,4 @@
 global simple_clamp
-global    opt_clamp
 
 default rel
 ; %define nop2	db	66h, 90h,
@@ -22,10 +21,7 @@ simple_clamp:
 	lea	rax, [rdi + 4 * rsi]
 	align	16
 .LOOP:
-	cmp	DWORD [rdi], 255
-	jbe	.NEXT
-	mov	DWORD [rdi], 255
-.NEXT:
+	and	DWORD [rdi], 255
 	add	rdi, 4
 	cmp	rdi, rax
 	jne	.LOOP
