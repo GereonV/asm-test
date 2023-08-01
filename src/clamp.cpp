@@ -1,50 +1,26 @@
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <algorithm>
 #include <chrono>
+#include <execution>
 #include <iostream>
 #include <memory>
 
-extern "C" {
-	using clamp_func = void(std::uint32_t * data, std::uint64_t count);
-	clamp_func cmov_clamp, jmp_clamp, opt_clamp; // handwritten assembly
-	clamp_func c_clamp, c_clamp_restrict, c_clamp_expect, c_clamp_cond, c_clamp_cond_expect; // index-loop
-	clamp_func cpp_clamp, cpp_expect; // STL
+using clamp_func = void(std::uint32_t * data, std::uint64_t count);
+
+extern "C" clamp_func simple_clamp; // handwritten assembly
+
+extern "C" [[gnu::noinline]] void replace_if(std::uint32_t * data, std::uint64_t count) {
+	std::replace_if(std::execution::par_unseq, data, data + count, [](auto x) { return x > 255; }, 255);
 }
 
-[[gnu::noinline]] void c_clamp(std::uint32_t * data, std::uint64_t count) {
-	for(std::uint64_t i{}; i < count; ++i)
-		data[i] = data[i] > 255 ? 255 : data[i];
+extern "C" [[gnu::noinline]] void transform_ternary(std::uint32_t * data, std::uint64_t count) {
+	std::transform(std::execution::par_unseq, data, data + count, data, [](auto x) { return x > 255 ? 255 : x; });
 }
 
-[[gnu::noinline]] void c_clamp_restrict(std::uint32_t * __restrict__ data, std::uint64_t count) {
-	for(std::uint64_t i{}; i < count; ++i)
-		data[i] = data[i] > 255 ? 255 : data[i];
-}
-
-[[gnu::noinline]] void c_clamp_expect(std::uint32_t * data, std::uint64_t count) {
-	for(std::uint64_t i{}; i < count; ++i)
-		data[i] = __builtin_expect(data[i] > 255, true) ? 255 : data[i];
-}
-
-[[gnu::noinline]] void c_clamp_cond(std::uint32_t * data, std::uint64_t count) {
-	for(std::uint64_t i{}; i < count; ++i)
-		if(data[i] > 255)
-			data[i] = 255;
-}
-
-[[gnu::noinline]] void c_clamp_cond_expect(std::uint32_t * data, std::uint64_t count) {
-	for(std::uint64_t i{}; i < count; ++i)
-		if(__builtin_expect(data[i] > 255, true))
-			data[i] = 255;
-}
-
-[[gnu::noinline]] void cpp_clamp(std::uint32_t * data, std::uint64_t count) {
-	std::replace_if(data, data + count, [](auto x) { return x > 255; }, 255);
-}
-
-[[gnu::noinline]] void cpp_clamp_expect(std::uint32_t * data, std::uint64_t count) {
-	std::replace_if(data, data + count, [](auto x) { return __builtin_expect(x > 255, true); }, 255);
+extern "C" [[gnu::noinline]] void transform_mod(std::uint32_t * data, std::uint64_t count) {
+	std::transform(std::execution::par_unseq, data, data + count, data, [](auto x) { return x % 256; });
 }
 
 struct func_t {
@@ -55,31 +31,26 @@ struct func_t {
 #define FUNC(func) func_t{#func, func}
 
 inline constexpr func_t functions[]{
-	FUNC(cmov_clamp),
-	FUNC(jmp_clamp),
-	FUNC(opt_clamp),
-	FUNC(c_clamp),
-	FUNC(c_clamp_restrict),
-	FUNC(c_clamp_expect),
-	FUNC(c_clamp_cond),
-	FUNC(c_clamp_cond_expect),
-	FUNC(cpp_clamp),
-	FUNC(cpp_clamp_expect),
+	FUNC(simple_clamp),
+	FUNC(replace_if),
+	FUNC(transform_ternary),
+	FUNC(transform_mod),
 };
 
 int main(int, char ** argv) {
 	using namespace std::chrono;
 	using clock = high_resolution_clock;
+	constexpr auto max_count = 1 << 16;
+	auto arr = std::make_unique<std::uint32_t[]>(max_count);
+	auto buf = std::make_unique<std::uint32_t[]>(max_count);
+	std::generate(arr.get(), arr.get() + max_count, std::rand);
 	for(auto && f : functions) {
 		std::cout << "Profiling function: " << f.name << '\n';
-		for(auto count{1 << 5}; count <= (1 << 18); count <<= 1) {
-			auto arr = std::make_unique<std::uint32_t[]>(count);
-			auto buf = std::make_unique<std::uint32_t[]>(count);
-			std::generate(arr.get(), arr.get() + count, std::rand);
+		for(auto count{1 << 10}; count <= (1 << 16); count <<= 1) {
 			nanoseconds duration_ns{0};
 			std::uint64_t iterations = 0;
-			while(duration_ns < seconds{1}) {
-				std::copy(arr.get(), arr.get() + count, buf.get());
+			while(duration_ns < seconds{2}) {
+				std::memcpy(buf.get(), arr.get(), 4 * count);
 				auto start = clock::now();
 				f.func(arr.get(), count);
 				auto end = clock::now();
@@ -89,7 +60,7 @@ int main(int, char ** argv) {
 			auto duration_s = duration_cast<duration<double>>(duration_ns);
 			auto seconds = duration_s.count();
 			std::cout <<
-				"count=" << std::setw(4) << count <<
+				"count=" << std::setw(6) << count <<
 				"\tbytes=" << std::setw(10) << iterations * count <<
 				"\tclamps/s=" << iterations * count / seconds << std::endl;
 		}

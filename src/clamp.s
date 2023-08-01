@@ -1,54 +1,33 @@
-global cmov_clamp
-global  jmp_clamp
-global  opt_clamp
+global simple_clamp
+global    opt_clamp
+
+default rel
+; %define nop2	db	66h, 90h,
+; %define nop3	db	0Fh, 1Fh, 00h,
+; %define nop4	db	0Fh, 1Fh, 40h, 00h,
+; %define nop5	db	0Fh, 1Fh, 44h, 00h, 00h,
+; %define nop6	db	66h, 0Fh, 1Fh, 44h, 00h, 00h,
+; %define nop7	db	0Fh, 1Fh, 80h, 00h, 00h, 00h, 00h,
+; %define nop8	db	0Fh, 1Fh, 84h, 00h, 00h, 00h, 00h, 00h,
+; %define nop9	db	66h, 0Fh, 1Fh, 84h, 00h, 00h, 00h, 00h, 00h,
 
 section .text
 
 ; clamp(uint32_t * data, uint64_t count)
-;                 rdi             rsi
+;                   rdi             rsi
 
-cmov_clamp:
+simple_clamp:
 	test	rsi, rsi
 	jz	.RET
-	mov	edx, 255
+	lea	rax, [rdi + 4 * rsi]
+	align	16
 .LOOP:
-	mov	eax, DWORD [rdi + 4 * rsi - 4]
-	cmp	eax, edx
-	cmova	eax, edx
-	mov	DWORD [rdi + 4 * rsi - 4], eax
-	sub	rsi, 1
-	jne	.LOOP
-.RET:
-	ret
-
-jmp_clamp:
-	test	rsi, rsi
-	jz	.RET
-	mov	edx, 255
-.LOOP:
-	mov	eax, DWORD [rdi + 4 * rsi - 4]
-	cmp	eax, edx
+	cmp	DWORD [rdi], 255
 	jbe	.NEXT
-	mov	DWORD [rdi + 4 * rsi - 4], edx
+	mov	DWORD [rdi], 255
 .NEXT:
-	sub	rsi, 1
-	jne	.LOOP
-.RET:
-	ret
-
-opt_clamp:
-	test	rsi, rsi
-	jz	.RET
-	xor 	ecx, ecx
-	mov 	edx, 255
-.LOOP:
-	mov	eax, DWORD [rdi + 4 * rcx]
-	cmp	eax, edx
-	jbe	.NEXT
-	mov	DWORD [rdi + 4 * rcx], edx
-.NEXT:
-	add	rcx, 1
-	cmp	rcx, rsi
+	add	rdi, 4
+	cmp	rdi, rax
 	jne	.LOOP
 .RET:
 	ret
