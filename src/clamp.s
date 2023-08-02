@@ -22,7 +22,10 @@ simple_clamp:
 	lea	rax, [rdi + 4 * rsi]
 	align	16
 .LOOP:
-	and	DWORD [rdi], 255
+	cmp	DWORD [rdi], 255
+	jbe	.NEXT
+	mov	DWORD [rdi], 255
+.NEXT:
 	add	rdi, 4
 	cmp	rdi, rax
 	jne	.LOOP
@@ -31,55 +34,18 @@ simple_clamp:
 
 	align	16
 opt_clamp:
-	; jump if too small
 	cmp	rsi, 8
 	jb	simple_clamp
-
-	; setup constants
-	mov	ecx, 8
-	mov	edx, 32
 	vmovdqa	ymm1, [and_mask]
-
-	; unaligned first packed clamp
-	vmovdqu	ymm0, [rdi]
-	vpand	ymm0, ymm0, ymm1
-	vmovdqu	[rdi], ymm0
-
-	; align rdi to next 32 bytes
-	; subtract from count in rsi accordingly
-	; rsi -= (32-rdi%32)/4
-	; rdi += 32-rdi%32
-	mov	rax, rdi
-	and	rdi, ~31
-	add	rdi, rdx
-	sub	rax, rdi
-	sar	rax, 2
-	add	rsi, rax
-
-	; no aligned moves possible
-	cmp	rsi, rcx
-	jb	.LAST
-
+	sub	rsi, 8
 	align	16
 .LOOP:
-	; aligned packed clamp
-	vmovdqa	ymm0, [rdi]
-	vpand	ymm0, ymm0, ymm1
-	vmovdqa	[rdi], ymm0
-
-	sub	rsi, rcx
-	add	rdi, rdx
-	cmp	rsi, rcx
-	jae	.LOOP
-.LAST:
-	; no last clamp necessary
-	test	rsi, rsi
-	jz	.RET
-
-	; unaligned packed clamp
-	sub	rsi, rcx
-	vmovdqu	ymm0, [rdi + 4 * rsi]
-	vpand	ymm0, ymm0, ymm1
+	vpand	ymm0, ymm1, [rdi]
+	vmovdqu	[rdi], ymm0
+	add	rdi, 32
+	sub	rsi, 8
+	jnc	.LOOP
+	vpand	ymm0, ymm1, [rdi + 4 * rsi]
 	vmovdqu	[rdi + 4 * rsi], ymm0
 .RET:
 	vzeroupper
