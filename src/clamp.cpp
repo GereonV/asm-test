@@ -63,6 +63,7 @@ int main(int, char ** argv) {
 		}
 		std::cout << '\n';
 		#else
+		std::transform(std::execution::par_unseq, arr.get(), arr.get() + max_count, arr.get(), [](auto x) { return x % 512; });
 		std::cout << "Testing function: " << f.name << std::flush;
 		for(std::uint64_t alignment{4}; alignment <= 64; alignment *= 2) {
 			auto offset = (64 + alignment - ((std::uintptr_t) buf.get() % 64)) / 4;
@@ -71,11 +72,9 @@ int main(int, char ** argv) {
 				auto og  = arr.get() + offset;
 				std::memcpy(ptr, og, 4 * count);
 				f.func(ptr, count);
-				for(auto end = ptr + count; ptr != end; ++ptr, ++og) {
-					if(*ptr != (*og > 255 ? 255 : *og)) {
-						std::cout << " - function failed\n";
-						return 1;
-					}
+				if(!std::ranges::equal(og, og + count, ptr, ptr + count, {}, [](auto x) { return x > 255 ? 255 : x; })) {
+					std::cout << " - function failed\n";
+					return 1;
 				}
 			}
 		}
