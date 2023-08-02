@@ -48,6 +48,7 @@ int main(int, char ** argv) {
 	for(auto && f : functions) {
 		std::cout << "Profiling function: " << f.name << '\n';
 		for(auto count{1 << 10}; count <= (1 << 16); count <<= 1) {
+			#if 1
 			nanoseconds duration_ns{0};
 			std::uint64_t iterations = 0;
 			while(duration_ns < seconds{2}) {
@@ -57,19 +58,21 @@ int main(int, char ** argv) {
 				auto end = clock::now();
 				duration_ns += end - start;
 				++iterations;
-				#if 0
-				if(std::any_of(buf.get(), buf.get() + count, [](auto x) { return x > 255; })) {
-					std::cout << "function failed\n";
-					return 1;
-				}
-				#endif
 			}
 			auto duration_s = duration_cast<duration<double>>(duration_ns);
 			auto seconds = duration_s.count();
 			std::cout <<
 				"count=" << std::setw(6) << count <<
-				"\tbytes=" << std::setw(10) << iterations * count <<
+				"\tclamps=" << std::setw(10) << iterations * count <<
 				"\tclamps/s=" << iterations * count / seconds << std::endl;
+			#else
+			std::memcpy(buf.get(), arr.get(), 4 * count);
+			if(std::any_of(buf.get(), buf.get() + count, [](auto x) { return x > 255; })) {
+				std::cout << "function failed\n";
+				return 1;
+			}
+			break;
+			#endif
 		}
 		std::cout << '\n';
 	}
