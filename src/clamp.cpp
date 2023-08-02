@@ -9,7 +9,7 @@
 
 using clamp_func = void(std::uint32_t * data, std::uint64_t count);
 
-extern "C" clamp_func simple_clamp; // handwritten assembly
+extern "C" clamp_func simple_clamp, opt_clamp; // handwritten assembly
 
 extern "C" [[gnu::noinline]] void replace_if(std::uint32_t * data, std::uint64_t count) {
 	std::replace_if(std::execution::par_unseq, data, data + count, [](auto x) { return x > 255; }, 255);
@@ -35,6 +35,7 @@ inline constexpr func_t functions[]{
 	FUNC(replace_if),
 	FUNC(transform_ternary),
 	FUNC(transform_mod),
+	FUNC(opt_clamp),
 };
 
 int main(int, char ** argv) {
@@ -52,10 +53,16 @@ int main(int, char ** argv) {
 			while(duration_ns < seconds{2}) {
 				std::memcpy(buf.get(), arr.get(), 4 * count);
 				auto start = clock::now();
-				f.func(arr.get(), count);
+				f.func(buf.get(), count);
 				auto end = clock::now();
 				duration_ns += end - start;
 				++iterations;
+				#if 0
+				if(std::any_of(buf.get(), buf.get() + count, [](auto x) { return x > 255; })) {
+					std::cout << "function failed\n";
+					return 1;
+				}
+				#endif
 			}
 			auto duration_s = duration_cast<duration<double>>(duration_ns);
 			auto seconds = duration_s.count();
