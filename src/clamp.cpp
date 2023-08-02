@@ -15,12 +15,8 @@ extern "C" [[gnu::noinline]] void replace_if(std::uint32_t * data, std::uint64_t
 	std::replace_if(std::execution::par_unseq, data, data + count, [](auto x) { return x > 255; }, 255);
 }
 
-extern "C" [[gnu::noinline]] void transform_ternary(std::uint32_t * data, std::uint64_t count) noexcept {
+extern "C" [[gnu::noinline]] void transform(std::uint32_t * data, std::uint64_t count) noexcept {
 	std::transform(std::execution::par_unseq, data, data + count, data, [](auto x) { return x > 255 ? 255 : x; });
-}
-
-extern "C" [[gnu::noinline]] void transform_mod(std::uint32_t * data, std::uint64_t count) noexcept {
-	std::transform(std::execution::par_unseq, data, data + count, data, [](auto x) { return x % 256; });
 }
 
 struct func_t {
@@ -33,9 +29,8 @@ struct func_t {
 inline constexpr func_t functions[]{
 	FUNC(simple_clamp),
 	FUNC(replace_if),
-	FUNC(transform_ternary),
-	FUNC(transform_mod),
-	FUNC(opt_clamp),
+	FUNC(transform),
+	// FUNC(opt_clamp),
 };
 
 int main(int, char ** argv) {
@@ -46,9 +41,9 @@ int main(int, char ** argv) {
 	auto buf = std::make_unique<std::uint32_t[]>(max_count);
 	std::generate(arr.get(), arr.get() + max_count, std::rand);
 	for(auto && f : functions) {
+		#if 1
 		std::cout << "Profiling function: " << f.name << '\n';
 		for(std::uint64_t count{max_count >> 5}; count <= max_count; count <<= 1) {
-			#if 1
 			nanoseconds duration_ns{0};
 			std::uint64_t iterations = 0;
 			while(duration_ns < seconds{2}) {
@@ -65,16 +60,27 @@ int main(int, char ** argv) {
 				"count=" << std::setw(6) << count <<
 				"\tclamps=" << std::setw(10) << iterations * count <<
 				"\tclamps/s=" << iterations * count / seconds << std::endl;
-			#else
-			std::memcpy(buf.get(), arr.get(), 4 * count);
-			if(std::any_of(buf.get(), buf.get() + count, [](auto x) { return x > 255; })) {
-				std::cout << "function failed\n";
-				return 1;
-			}
-			break;
-			#endif
 		}
 		std::cout << '\n';
+		#else
+		std::cout << "Testing function: " << f.name << std::flush;
+		for(std::uint64_t alignment{4}; alignment <= 64; alignment *= 2) {
+			auto offset = (64 + alignment - ((std::uintptr_t) buf.get() % 64)) / 4;
+			for(std::uint64_t count{}; count <= 512; ++count) {
+				auto ptr = buf.get() + offset;
+				auto og  = arr.get() + offset;
+				std::memcpy(ptr, og, 4 * count);
+				f.func(ptr, count);
+				for(auto end = ptr + count; ptr != end; ++ptr, ++og) {
+					if(*ptr != (*og > 255 ? 255 : *og)) {
+						std::cout << " - function failed\n";
+						return 1;
+					}
+				}
+			}
+		}
+		std::cout << " - function ok\n";
+		#endif
 	}
 }
 
