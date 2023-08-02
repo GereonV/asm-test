@@ -48,7 +48,7 @@ opt_clamp:
 	; align rdi to next 32 bytes
 	; subtract from count in rsi accordingly
 	; rsi -= (32-rdi%32)/4
-	; rdi += 32-(rdi%32)
+	; rdi += 32-rdi%32
 	mov	rax, rdi
 	and	rdi, ~31
 	add	rdi, rdx
@@ -72,11 +72,16 @@ opt_clamp:
 	cmp	rsi, rcx
 	jae	.LOOP
 .LAST:
+	; no last clamp necessary
+	test	rsi, rsi
+	jz	.RET
+
 	; unaligned packed clamp
 	sub	rsi, rcx
 	vmovdqu	ymm0, [rdi + 4 * rsi]
 	vpand	ymm0, ymm0, ymm1
 	vmovdqu	[rdi + 4 * rsi], ymm0
+.RET:
 	vzeroupper
 	ret
 
