@@ -1,4 +1,5 @@
 global simple_clamp
+global   cmov_clamp
 global    opt_clamp
 
 %use smartalign
@@ -10,12 +11,12 @@ section .text
 ; clamp(uint32_t * data, uint64_t count)
 ;                   rdi             rsi
 
+	align	32
 simple_clamp:
 	test	rsi, rsi
 	jz	.RET
 	lea	rax, [rdi + 4 * rsi]
-	align	16
-.LOOP:
+.LOOP:	; no alignment sice loop is within 32-byte alignment
 	cmp	DWORD [rdi], 255
 	jbe	.NEXT
 	mov	DWORD [rdi], 255
@@ -26,28 +27,43 @@ simple_clamp:
 .RET:
 	ret
 
-	align	16
+	align	32
+cmov_clamp:
+	test	rsi, rsi
+	jz	.RET
+	lea	rax, [rdi + 4 * rsi]
+	mov	edx, 255
+.LOOP:	; no alignment sice loop is within 32-byte alignment
+	mov	ecx, [rdi]
+	cmp	ecx, edx
+	cmova	ecx, edx
+	mov	[rdi], ecx
+	add	rdi, 4
+	cmp	rdi, rax
+	jne	.LOOP
+.RET:
+	ret
+
+	align	32
 opt_clamp:
 	cmp	rsi, 8
 	jb	simple_clamp
-	vmovdqa	ymm1, [and_mask]
+	vmovdqa	ymm0, [data_255]
 	sub	rsi, 8
-	align	16
+	align	32
 .LOOP:
-	vpand	ymm0, ymm1, [rdi]
-	vmovdqu	[rdi], ymm0
+	vpminud	ymm1, ymm0, [rdi]
+	vmovdqu	[rdi], ymm1
 	add	rdi, 32
 	sub	rsi, 8
 	jnc	.LOOP
-	vpand	ymm0, ymm1, [rdi + 4 * rsi]
-	vmovdqu	[rdi + 4 * rsi], ymm0
-.RET:
+	vpminud	ymm1, ymm0, [rdi + 4 * rsi]
+	vmovdqu	[rdi + 4 * rsi], ymm1
 	vzeroupper
 	ret
-
 
 section .data
 
 	align	32
-and_mask:
-	dd	255, 255, 255, 255, 255, 255, 255, 255
+data_255:
+	times 8		dd	255
