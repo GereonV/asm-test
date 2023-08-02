@@ -7,19 +7,19 @@
 #include <iostream>
 #include <memory>
 
-using clamp_func = void(std::uint32_t * data, std::uint64_t count);
+using clamp_func = void(std::uint32_t * data, std::uint64_t count) noexcept;
 
 extern "C" clamp_func simple_clamp, opt_clamp; // handwritten assembly
 
-extern "C" [[gnu::noinline]] void replace_if(std::uint32_t * data, std::uint64_t count) {
+extern "C" [[gnu::noinline]] void replace_if(std::uint32_t * data, std::uint64_t count) noexcept {
 	std::replace_if(std::execution::par_unseq, data, data + count, [](auto x) { return x > 255; }, 255);
 }
 
-extern "C" [[gnu::noinline]] void transform_ternary(std::uint32_t * data, std::uint64_t count) {
+extern "C" [[gnu::noinline]] void transform_ternary(std::uint32_t * data, std::uint64_t count) noexcept {
 	std::transform(std::execution::par_unseq, data, data + count, data, [](auto x) { return x > 255 ? 255 : x; });
 }
 
-extern "C" [[gnu::noinline]] void transform_mod(std::uint32_t * data, std::uint64_t count) {
+extern "C" [[gnu::noinline]] void transform_mod(std::uint32_t * data, std::uint64_t count) noexcept {
 	std::transform(std::execution::par_unseq, data, data + count, data, [](auto x) { return x % 256; });
 }
 
@@ -41,13 +41,13 @@ inline constexpr func_t functions[]{
 int main(int, char ** argv) {
 	using namespace std::chrono;
 	using clock = high_resolution_clock;
-	constexpr auto max_count = 1 << 16;
+	constexpr auto max_count = 1 << 20;
 	auto arr = std::make_unique<std::uint32_t[]>(max_count);
 	auto buf = std::make_unique<std::uint32_t[]>(max_count);
 	std::generate(arr.get(), arr.get() + max_count, std::rand);
 	for(auto && f : functions) {
 		std::cout << "Profiling function: " << f.name << '\n';
-		for(auto count{1 << 10}; count <= (1 << 16); count <<= 1) {
+		for(std::uint64_t count{max_count >> 5}; count <= max_count; count <<= 1) {
 			#if 1
 			nanoseconds duration_ns{0};
 			std::uint64_t iterations = 0;
@@ -59,7 +59,7 @@ int main(int, char ** argv) {
 				duration_ns += end - start;
 				++iterations;
 			}
-			auto duration_s = duration_cast<duration<double>>(duration_ns);
+			duration<double> duration_s{duration_ns};
 			auto seconds = duration_s.count();
 			std::cout <<
 				"count=" << std::setw(6) << count <<
