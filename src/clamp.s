@@ -1,5 +1,6 @@
 global simple_clamp
 global   cmov_clamp
+global    bit_clamp
 global    opt_clamp
 
 %use smartalign
@@ -38,6 +39,26 @@ cmov_clamp:
 	cmp	ecx, edx
 	cmova	ecx, edx
 	mov	[rdi], ecx
+	add	rdi, 4
+	cmp	rdi, rax
+	jne	.LOOP
+.RET:
+	ret
+
+	align	32
+bit_clamp:
+	test	rsi, rsi
+	jz	.RET
+	lea	rax, [rdi + 4 * rsi]
+	mov	edx, 255
+	align	32
+.LOOP:
+	mov	ecx, [rdi]
+	sub	ecx, edx
+	sbb	esi, esi	; esi = ecx < edx ? -1 : 0
+	and	esi, ecx	; esi = ecx < edx ? ecx-edx : 0
+	add	esi, edx	; esi = ecx < edx ? ecx : edx
+	mov	[rdi], esi
 	add	rdi, 4
 	cmp	rdi, rax
 	jne	.LOOP
