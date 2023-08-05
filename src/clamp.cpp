@@ -68,9 +68,9 @@ int main() {
 			for(std::uint64_t count{}; count <= 1024; ++count) {
 				auto ptr = buf.get() + offset;
 				auto og  = arr.get() + offset;
-				std::memcpy(ptr, og, 4 * count);
+				std::memcpy(ptr, og, 4 * (count + 32));
 				f.func(ptr, count);
-				if(!std::ranges::equal(og, og + count, ptr, ptr + count, {}, [](auto x) { return x > 255 ? 255 : x; })) {
+				if(!std::ranges::equal(og, og + count, ptr, ptr + count, {}, [](auto x) { return x > 255 ? 255 : x; }) || !std::equal(og + count, og + count + 32, ptr + count)) {
 					std::cout << " - failed\n";
 					std::cout << "count=" << count << "\talignment=" << alignment << '\n';
 					return 1;
