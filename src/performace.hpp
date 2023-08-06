@@ -12,11 +12,11 @@ namespace performance {
 		std::uint64_t iterations;
 	};
 
-	template<typename F, typename S>
+	template<typename F, typename S = decltype([] {})>
 	[[nodiscard]] inline Result measure_performance(
 		F && f,
 		Duration min_duration,
-		S && s = [] {}
+		S && s = {}
 	) noexcept(noexcept(s()) && noexcept(f())) {
 		Duration duration{0};
 		std::uint64_t iterations{0};
